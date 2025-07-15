@@ -1,39 +1,48 @@
-# Code refactored from https://docs.streamlit.io/knowledge-base/tutorials/build-conversational-apps
-
-import openai
 import streamlit as st
+import requests
+import base64
 
-with st.sidebar:
-    st.title('🤖💬 OpenAI Chatbot')
-    if 'OPENAI_API_KEY' in st.secrets:
-        st.success('API key already provided!', icon='✅')
-        openai.api_key = st.secrets['OPENAI_API_KEY']
-    else:
-        openai.api_key = st.text_input('Enter OpenAI API token:', type='password')
-        if not (openai.api_key.startswith('sk-') and len(openai.api_key)==51):
-            st.warning('Please enter your credentials!', icon='⚠️')
+st.set_page_config(page_title="Amazon UI Bot", page_icon="🛒")
+st.title("🛍️ Amazon UI Automation Chatbot")
+
+# Initialize session state
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# User input
+user_input = st.text_input("You:", "", key="user_input")
+
+if st.button("Send") and user_input.strip():
+    st.session_state.chat_history.append(("user", user_input))
+
+    # Call MCP server
+    try:
+        mcp_response = requests.post(
+            "http://localhost:5000/execute",
+            json={"command": user_input},
+            timeout=60
+        )
+        mcp_response.raise_for_status()
+        mcp_data = mcp_response.json()
+
+        # Check if screenshot is included
+        if "screenshot_base64" in mcp_data:
+            st.session_state.chat_history.append(("mcp", mcp_data["message"]))
+            st.session_state.chat_history.append(("screenshot", mcp_data["screenshot_base64"]))
         else:
-            st.success('Proceed to entering your prompt message!', icon='👉')
+            st.session_state.chat_history.append(("mcp", mcp_data.get("message", "[No message]")))
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+    except Exception as e:
+        st.session_state.chat_history.append(("mcp", f"[Error contacting MCP server: {e}]"))
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    st.rerun()
 
-if prompt := st.chat_input("What is up?"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        full_response = ""
-        for response in openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": m["role"], "content": m["content"]}
-                      for m in st.session_state.messages], stream=True):
-            full_response += response.choices[0].delta.get("content", "")
-            message_placeholder.markdown(full_response + "▌")
-        message_placeholder.markdown(full_response)
-    st.session_state.messages.append({"role": "assistant", "content": full_response})
+# Display chat history
+for sender, msg in st.session_state.chat_history:
+    if sender == "user":
+        st.markdown(f"**You:** {msg}")
+    elif sender == "mcp":
+        with st.expander("🛠️ MCP Response"):
+            st.markdown(msg)
+    elif sender == "screenshot":
+        st.image(base64.b64decode(msg), caption="📸 Screenshot", use_column_width=True)
