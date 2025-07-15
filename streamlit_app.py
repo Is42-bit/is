@@ -2,8 +2,8 @@ import streamlit as st
 import requests
 import base64
 
-st.set_page_config(page_title="Amazon UI Bot", page_icon="🛒")
-st.title("🛍️ Amazon UI Automation Chatbot")
+st.set_page_config(page_title="SauceDemo UI Bot", page_icon="🛒")
+st.title("🛍️ Natural Language UI Automation Chatbot")
 
 # Initialize session state
 if "chat_history" not in st.session_state:
